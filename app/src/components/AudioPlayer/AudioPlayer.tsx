@@ -459,7 +459,7 @@ export function AudioPlayer() {
     // Use double requestAnimationFrame to ensure DOM is fully rendered
     let rafId1: number;
     let rafId2: number;
-    let timeoutId: number | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     rafId1 = requestAnimationFrame(() => {
       rafId2 = requestAnimationFrame(() => {

@@ -63,7 +63,27 @@ class TaskManager:
         """Mark a generation as complete."""
         if task_id in self._active_generations:
             del self._active_generations[task_id]
-    
+
+    def cancel_generation(self, task_id: str) -> bool:
+        """Cancel an active generation.
+
+        Returns True if the generation was active and has been removed,
+        False if no such active generation existed.
+        """
+        if task_id in self._active_generations:
+            del self._active_generations[task_id]
+            return True
+        return False
+
+    def cancel_all_generations(self) -> int:
+        """Cancel every active generation.
+
+        Returns the number of generations that were cancelled.
+        """
+        count = len(self._active_generations)
+        self._active_generations.clear()
+        return count
+
     def get_active_downloads(self) -> List[DownloadTask]:
         """Get all active downloads."""
         return list(self._active_downloads.values())

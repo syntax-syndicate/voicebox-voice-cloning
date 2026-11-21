@@ -32,6 +32,11 @@ export const useServerStore = create<ServerStore>()(
     }),
     {
       name: 'voicebox-server',
+      onRehydrateStorage: () => (state) => {
+        if (state && state.serverUrl.includes(':8000')) {
+          state.setServerUrl('http://127.0.0.1:17493');
+        }
+      },
     },
   ),
 );

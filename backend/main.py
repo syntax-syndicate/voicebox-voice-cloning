@@ -583,6 +583,11 @@ async def generate_speech(
                 )
 
         await tts_model.load_model_async(model_size)
+
+        # Bail out if the generation was cancelled while the model loaded.
+        if not task_manager.is_generation_active(generation_id):
+            raise HTTPException(status_code=409, detail="Generation was cancelled")
+
         audio, sample_rate = await tts_model.generate(
             data.text,
             voice_prompt,
@@ -590,6 +595,11 @@ async def generate_speech(
             data.seed,
             data.instruct,
         )
+
+        # Bail out if the generation was cancelled during inference: discard
+        # the audio instead of saving it as a completed generation.
+        if not task_manager.is_generation_active(generation_id):
+            raise HTTPException(status_code=409, detail="Generation was cancelled")
 
         # Calculate duration
         duration = len(audio) / sample_rate
@@ -612,17 +622,21 @@ async def generate_speech(
             instruct=data.instruct,
         )
         
-        # Mark generation as complete
-        task_manager.complete_generation(generation_id)
-        
         return generation
-        
+
+    except HTTPException:
+        # Don't swallow intentional HTTP responses (202 download-in-progress,
+        # 404 profile not found, 409 cancelled, ...) in the generic handler.
+        raise
     except ValueError as e:
-        task_manager.complete_generation(generation_id)
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        task_manager.complete_generation(generation_id)
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # Always clear the active task, even on cancellation, client
+        # disconnect, or an exception — otherwise it piles up as permanently
+        # "active" and sticks the UI in a generating state.
+        task_manager.complete_generation(generation_id)
 
 
 # ============================================
@@ -1632,6 +1646,33 @@ async def get_active_tasks():
         downloads=active_downloads,
         generations=active_generations,
     )
+
+
+@app.delete("/tasks/generations/{task_id}")
+async def cancel_generation(task_id: str):
+    """Cancel a single active generation.
+
+    Removes the generation from the active list so it stops being reported
+    as in-progress. If the generation is mid-inference, the running request
+    detects the cancellation and discards its result instead of saving it.
+    """
+    task_manager = get_task_manager()
+    cancelled = task_manager.cancel_generation(task_id)
+    if not cancelled:
+        raise HTTPException(status_code=404, detail="Active generation not found")
+    return {"message": "Generation cancelled", "task_id": task_id}
+
+
+@app.delete("/tasks/generations")
+async def cancel_all_generations():
+    """Cancel every active generation.
+
+    Useful to clear generations that got stuck (e.g. after a failed model
+    download) and are piling up as permanently active.
+    """
+    task_manager = get_task_manager()
+    cancelled = task_manager.cancel_all_generations()
+    return {"message": f"Cancelled {cancelled} generation(s)", "cancelled": cancelled}
 
 
 # ============================================

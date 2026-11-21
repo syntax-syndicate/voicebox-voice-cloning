@@ -330,6 +330,19 @@ class ApiClient {
     return this.request<ActiveTasksResponse>('/tasks/active');
   }
 
+  async cancelGeneration(taskId: string): Promise<{ message: string; task_id: string }> {
+    return this.request<{ message: string; task_id: string }>(
+      `/tasks/generations/${taskId}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  async cancelAllGenerations(): Promise<{ message: string; cancelled: number }> {
+    return this.request<{ message: string; cancelled: number }>('/tasks/generations', {
+      method: 'DELETE',
+    });
+  }
+
   // Audio Channels
   async listChannels(): Promise<
     Array<{

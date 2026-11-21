@@ -1,6 +1,8 @@
 import { Link, useMatchRoute } from '@tanstack/react-router';
-import { Box, BookOpen, Loader2, Mic, Server, Speaker, Volume2 } from 'lucide-react';
+import { Box, BookOpen, Loader2, Mic, Server, Speaker, Volume2, X } from 'lucide-react';
+import { useState } from 'react';
 import voiceboxLogo from '@/assets/voicebox-logo.png';
+import { apiClient } from '@/lib/api/client';
 import { cn } from '@/lib/utils/cn';
 import { useGenerationStore } from '@/stores/generationStore';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -20,9 +22,29 @@ const tabs = [
 
 export function Sidebar({ isMacOS }: SidebarProps) {
   const isGenerating = useGenerationStore((state) => state.isGenerating);
+  const setIsGenerating = useGenerationStore((state) => state.setIsGenerating);
+  const setActiveGenerationId = useGenerationStore((state) => state.setActiveGenerationId);
   const audioUrl = usePlayerStore((state) => state.audioUrl);
   const isPlayerVisible = !!audioUrl;
   const matchRoute = useMatchRoute();
+
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  const handleCancelGeneration = async () => {
+    if (isCancelling) return;
+    setIsCancelling(true);
+    try {
+      await apiClient.cancelAllGenerations();
+      // Clear local generating state immediately; the active-tasks poll will
+      // confirm the server side is clear on its next tick.
+      setIsGenerating(false);
+      setActiveGenerationId(null);
+    } catch (error) {
+      console.error('Failed to cancel generation:', error);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   return (
     <div
@@ -43,7 +65,7 @@ export function Sidebar({ isMacOS }: SidebarProps) {
           // For index route, use exact match; for others, use default matching
           const isActive =
             tab.path === '/'
-              ? matchRoute({ to: '/', exact: true })
+              ? matchRoute({ to: '/' })
               : matchRoute({ to: tab.path });
 
           return (
@@ -67,7 +89,7 @@ export function Sidebar({ isMacOS }: SidebarProps) {
       {/* Spacer to push loader to bottom */}
       <div className="flex-1" />
 
-      {/* Generation Loader */}
+      {/* Generation Loader / Cancel button */}
       {isGenerating && (
         <div
           className={cn(
@@ -75,7 +97,17 @@ export function Sidebar({ isMacOS }: SidebarProps) {
             isPlayerVisible ? 'mb-[120px]' : 'mb-0',
           )}
         >
-          <Loader2 className="h-6 w-6 text-accent animate-spin" />
+          <button
+            type="button"
+            onClick={handleCancelGeneration}
+            disabled={isCancelling}
+            title="Cancel generation"
+            aria-label="Cancel generation"
+            className="group relative w-10 h-10 rounded-full flex items-center justify-center hover:bg-destructive/10 transition-colors disabled:opacity-50"
+          >
+            <Loader2 className="h-6 w-6 text-accent animate-spin group-hover:opacity-0 transition-opacity" />
+            <X className="h-5 w-5 text-destructive absolute opacity-0 group-hover:opacity-100 transition-opacity" />
+          </button>
         </div>
       )}
     </div>
